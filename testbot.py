@@ -11,29 +11,25 @@ starttime = time.time()
 
 #read token
 with open("A:\\Documents\\Discord Bottt\\token.txt", "r") as f:
-    token=f.readlines()[0]
+    token = f.readlines()[0]
 
 #read from config
 with open("A:\\Documents\\Discord Bottt\\configu.txt", "r") as j:
-    lines=j.readlines()
-    ownerid=int(((lines[0])[9:]).strip())
-    prefix=(str((lines[1])[7:])).strip()
-    playing=(str(lines[2])[8:]).strip()
-    # muterolename=(str(lines[3])[15:]).strip()
-    # embedcolor=((lines[3])[12:]).strip()
-    latitude=float(((lines[4])[9:]).strip())
-    longitude=float(((lines[5])[10:]).strip())
+    lines = j.readlines()
+    ownerid = int(((lines[0])[9:]).strip())
+    prefix = (str((lines[1])[7:])).strip()
+    playing = (str(lines[2])[8:]).strip()
 
 #initialize variables
 bot = commands.Bot(command_prefix = prefix, help_command = None)
-version = 1.3
-embedcolor=0x71368a
+version = 1.4
+embedcolor = 0x71368a
 game = discord.Game(playing)
 
 #runs on bot ready
 @bot.event
 async def on_ready():
-    print("Bot live!")
+    print(time.ctime() + " Bot live!")
     game = discord.Game(playing)
     await bot.change_presence(activity = game)
 
@@ -174,6 +170,18 @@ async def echo(ctx, *, args):
 async def gay(ctx):
     chase = bot.get_user(231600702819008512)
     await ctx.send(str(chase.mention) + " Chase is gay :KappaPride:")
+
+#prints that the bot has been disconnected
+@bot.event
+async def on_disconnect():
+    while(True):
+        print(time.ctime() + " Client disconnected")
+        await asyncio.sleep(5)
+
+#prints when bot has been reconnected
+@bot.event 
+async def on_resumed():
+    print(time.ctime() + " Client reconnected!")
 
 #run bot
 bot.run(token)
