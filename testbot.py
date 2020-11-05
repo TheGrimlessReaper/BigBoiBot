@@ -68,6 +68,7 @@ async def info(ctx):
     embed.add_field(name = "Ping", value = str(int(bot.latency * 1000)) + " ms", inline = False)
     embed.add_field(name = "Version", value = "Discord.py version: " + str(discord.__version__) + " " + str(discord.version_info.releaselevel) + " \nBot version: " + str(version), inline = False)
     embed.add_field(name = "Uptime", value = str(time2), inline = False)
+    embed.add_field(name = "View source:", value = "https://github.com/TheGrimlessReaper/BigBoiBot", inline = False)
     await ctx.send(content = None, embed = embed)
 
 #command that pings the user and sends Pong
