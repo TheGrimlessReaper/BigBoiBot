@@ -3,9 +3,11 @@ import discord
 from discord.ext import commands, tasks
 import asyncio
 import time
+import datetime
 import random
+from noaa_sdk import noaa
 
-#start
+#start bot
 print(time.ctime() + " Bot starting...")
 starttime = time.time()
 
@@ -22,9 +24,10 @@ with open("/root/bot/configu.txt", "r") as j:
 
 #initialize variables
 bot = commands.Bot(command_prefix = prefix, help_command = None)
-version = 1.4
+version = 1.41
 embedcolor = 0x71368a
 game = discord.Game(playing)
+n = noaa.NOAA()
 
 #runs on bot ready
 @bot.event
@@ -52,6 +55,7 @@ async def help(ctx):
     embed.add_field(name = "google `or` g", value = "Sends Google search link.", inline = False)
     embed.add_field(name = "duckduckgo `or` ddg", value = "Sends DuckDuckGo search link.", inline = False)
     embed.add_field(name = "gay", value = "Because Chase is gay.", inline = False)
+    embed.add_field(name = "horny", value = "Because y'all are horny.", inline = False)
     await ctx.send(content = None, embed = embed)
 
 #info command
@@ -170,8 +174,9 @@ async def echo(ctx, *, args):
 #because chase is gay
 @bot.command()
 async def gay(ctx):
-    chase = bot.get_user(231600702819008512)
-    await ctx.send(str(chase.mention) + " Chase is gay :KappaPride:")
+    chase = await bot.fetch_user(231600702819008512)
+    KappaPride = bot.get_emoji(449082148415078401)
+    await ctx.send(str(chase.mention) + " Chase is gay " + str(KappaPride))
 
 #prints that the bot has been disconnected
 @bot.event
@@ -230,5 +235,66 @@ async def hangman(ctx):
                         else:
                             await user.send("Okay, getting the game ready for you.")
                             cont, playing = False
+
+#because y'all are horny
+@bot.command()
+async def horny(ctx):
+    await ctx.send(file = discord.File("/root/bot/horny.jpg"))
+
+#command that gives the weather from a US zip code
+@bot.command()
+async def weather(ctx, *args):
+    if args:
+        if args[0].isdigit():
+            zipCode = str(args[0])
+            async with ctx.channel.typing():
+                embed = discord.Embed(title = "Weather for " + zipCode + ":", description = "Weather provided by [weather.gov](https://www.weather.gov/).", color = 0x3498db)
+                hourlyForecasts = n.get_forecasts(zipCode, 'US', hourly = True)
+                #datetime object of the current time in GMT
+                currentTimeGMT = datetime.datetime.now(datetime.timezone.utc)
+                i = 0
+                for f in hourlyForecasts:
+                    #datetime object of the time of the spot being iterated in hourlyForecasts
+                    weatherTime = datetime.datetime.strptime(f['startTime'], "%Y-%m-%dT%H:%M:%S%z")
+                    #this line just checks if the string of current hour in gmt is equal to the string of the hour of the place in the forecast converted to gmt (so it will work with any time zone)
+                    if currentTimeGMT.strftime("%I %p") == (datetime.datetime.utcfromtimestamp(weatherTime.timestamp()).strftime("%I %p")):
+                        #if it is then break the for loop
+                        break
+                    #if it is not then add 1 to the index of hourly forecasts to use
+                    else:
+                        i+=1
+                hourlyForecasts = hourlyForecasts[i:i+6]
+                embedString = ""
+                #adding the forecasts themselves to the embed
+                for f in hourlyForecasts:
+                    t = datetime.datetime.strptime((f['startTime']), "%Y-%m-%dT%H:%M:%S%z").strftime("%I:%M %p")
+                    embedString += (t + " - " + str(f['temperature']) + "°" + f['temperatureUnit'] + ", " + f['shortForecast'] + "\n")
+                embed.add_field(name = "Next 6 hours:", value = embedString, inline = False)
+                
+                embedString = ""
+                dailyForecasts = n.get_forecasts(zipCode, 'US', hourly=False)
+                for f in dailyForecasts:
+                    #same concept as in hourly, just converting the time object we are iterating at to seconds since epoch
+                    endT = datetime.datetime.strptime(f['endTime'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
+                    #seconds since epoch of current time object
+                    currentT = datetime.datetime.now().timestamp()
+                    #if the current time is after the end time of f in dailyForecasts
+                    if endT <= currentT:
+                        #add 1 to the starting index of dailyForecasts
+                        i+=1
+                    else:
+                        #else stop checking
+                        break
+                dailyForecasts = dailyForecasts[i:i+6]
+                #adding the forecasts themselves to the embed
+                for f in dailyForecasts:
+                    embedString += (f['name'] + " - " + f['detailedForecast'] + "\n")
+                embed.add_field(name = "Next 3 days:", value  = embedString, inline = False)
+                await ctx.send(content = None, embed = embed)
+        else:
+            await ctx.send("Sorry, cities are not supported yet. Please input a zip code insteead.")
+    else:
+        await ctx.send("Please input a zip code.")
+
 #run bot
 bot.run(token)
