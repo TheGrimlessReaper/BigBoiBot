@@ -1,0 +1,2 @@
+noaa-sdk==0.1.18
+discord.py==1.5.1
