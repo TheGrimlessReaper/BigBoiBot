@@ -7,18 +7,30 @@ import datetime
 import random
 import json
 from os import path
+import googlemaps
 from noaa_sdk import noaa
 
 #start bot
 print(time.ctime() + " Bot starting...")
 starttime = time.time()
 
+#file paths
+jsonpath = "/root/bot/reminders.json"
+tokenpath = "/root/bot/token.txt"
+configpath = "/root/bot/configu.txt"
+mapskeypath = "/root/bot/mapskey.txt"
+hornypath = "/root/bot/horny.jpg"
+
 #read token
-with open("/root/bot/token.txt", "r") as f:
+with open(tokenpath, "r") as f:
     token = f.readlines()[0]
 
+#read maps key
+with open(mapskeypath, "r") as j:
+    mapskey = j.readlines()[0]
+
 #read from config
-with open("/root/bot/configu.txt", "r") as j:
+with open(configpath, "r") as j:
     lines = j.readlines()
     ownerid = int(((lines[0])[9:]).strip())
     prefix = (str((lines[1])[7:])).strip()
@@ -26,11 +38,11 @@ with open("/root/bot/configu.txt", "r") as j:
 
 #initialize variables
 bot = commands.Bot(command_prefix = prefix, help_command = None)
-version = 1.5
+version = 1.6
 embedcolor = 0x71368a
 game = discord.Game(playing)
 n = noaa.NOAA()
-jsonpath = "/root/bot/reminders.json"
+m = googlemaps.Client(key = mapskey)
 
 #runs on bot ready
 @bot.event
@@ -313,62 +325,85 @@ async def hangman(ctx):
 #because y'all are horny
 @bot.command()
 async def horny(ctx):
-    await ctx.send(file = discord.File("/root/bot/horny.jpg"))
+    await ctx.send(file = discord.File(hornypath))
 
-#command that gives the weather from a US zip code
+#command that gives the weather
 @bot.command()
 async def weather(ctx, *args):
     if args:
-        if args[0].isdigit():
-            zipCode = str(args[0])
-            async with ctx.channel.typing():
-                embed = discord.Embed(title = "Weather for " + zipCode + ":", description = "Weather provided by [weather.gov](https://www.weather.gov/).", color = 0x3498db)
-                hourlyForecasts = n.get_forecasts(zipCode, 'US', hourly = True)
-                #datetime object of the current time in GMT
-                currentTimeGMT = datetime.datetime.now(datetime.timezone.utc)
-                i = 0
-                for f in hourlyForecasts:
-                    #datetime object of the time of the spot being iterated in hourlyForecasts
-                    weatherTime = datetime.datetime.strptime(f['startTime'], "%Y-%m-%dT%H:%M:%S%z")
-                    #this line just checks if the string of current hour in gmt is equal to the string of the hour of the place in the forecast converted to gmt (so it will work with any time zone)
-                    if currentTimeGMT.strftime("%I %p") == (datetime.datetime.utcfromtimestamp(weatherTime.timestamp()).strftime("%I %p")):
-                        #if it is then break the for loop
-                        break
-                    #if it is not then add 1 to the index of hourly forecasts to use
-                    else:
-                        i+=1
-                hourlyForecasts = hourlyForecasts[i:i+6]
-                embedString = ""
-                #adding the forecasts themselves to the embed
-                for f in hourlyForecasts:
-                    t = datetime.datetime.strptime((f['startTime']), "%Y-%m-%dT%H:%M:%S%z").strftime("%I:%M %p")
-                    embedString += (t + " - " + str(f['temperature']) + "°" + f['temperatureUnit'] + ", " + f['shortForecast'] + "\n")
-                embed.add_field(name = "Next 6 hours:", value = embedString, inline = False)
-                
-                embedString = ""
-                dailyForecasts = n.get_forecasts(zipCode, 'US', hourly=False)
-                for f in dailyForecasts:
-                    #same concept as in hourly, just converting the time object we are iterating at to seconds since epoch
-                    endT = datetime.datetime.strptime(f['endTime'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
-                    #seconds since epoch of current time object
-                    currentT = datetime.datetime.now().timestamp()
-                    #if the current time is after the end time of f in dailyForecasts
-                    if endT <= currentT:
-                        #add 1 to the starting index of dailyForecasts
-                        i+=1
-                    else:
-                        #else stop checking
-                        break
-                dailyForecasts = dailyForecasts[i:i+6]
-                #adding the forecasts themselves to the embed
-                for f in dailyForecasts:
-                    embedString += (f['name'] + " - " + f['detailedForecast'] + "\n")
-                embed.add_field(name = "Next 3 days:", value  = embedString, inline = False)
-                await ctx.send(content = None, embed = embed)
-        else:
-            await ctx.send("Sorry, cities are not supported yet. Please input a zip code insteead.")
-    else:
-        await ctx.send("Please input a zip code.")
+        # zipCode = str(args[0])
+        async with ctx.channel.typing():
+            search = ""
+            for x in args:
+                search += str(x) + " "
+            #searches for the location's coordinates using the google maps api
+            geo = m.geocode(search)
+            lat = float(round(geo[0]['geometry']['location']['lat'], 4))
+            lon = float(round(geo[0]['geometry']['location']['lng'], 4))
+            embed = discord.Embed(title = "Weather for " + search + ":", description = "Weather provided by [the National Weather Service](https://www.weather.gov/).", color = 0x3498db)
+            hourlyForecasts = n.points_forecast(lat, lon, hourly = True)
+            #datetime object of the current time in GMT
+            currentTimeGMT = datetime.datetime.now(datetime.timezone.utc)
+            i = 0
+            for f in hourlyForecasts['properties']['periods']:
+                #datetime object of the time of the spot being iterated in hourlyForecasts
+                weatherTime = datetime.datetime.strptime(f['startTime'], "%Y-%m-%dT%H:%M:%S%z")
+                #this line just checks if the string of current hour in gmt is equal to the string of the hour of the place in the forecast converted to gmt (so it will work with any time zone)
+                if currentTimeGMT.strftime("%I %p") == (datetime.datetime.utcfromtimestamp(weatherTime.timestamp()).strftime("%I %p")):
+                    #if it is then break the for loop
+                    break
+                #if it is not then add 1 to the index of hourly forecasts to use
+                else:
+                    i+=1
+            hourlyForecasts = hourlyForecasts['properties']['periods'][i:i+6]
+            embedString = ""
+            #adding the forecasts to the embed
+            for f in hourlyForecasts:
+                t = datetime.datetime.strptime((f['startTime']), "%Y-%m-%dT%H:%M:%S%z").strftime("%I:%M %p")
+                embedString += (t + " - " + str(f['temperature']) + "°" + f['temperatureUnit'] + ", " + f['shortForecast'] + "\n")
+            embed.add_field(name = "Next 6 hours:", value = embedString, inline = False)
+            
+            embedString = ""
+            dailyForecasts = n.points_forecast(lat, lon, hourly = False)
+            for f in dailyForecasts['properties']['periods']:
+                #same concept as in hourly, just converting the time object we are iterating at to seconds since epoch
+                endT = datetime.datetime.strptime(f['endTime'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
+                #seconds since epoch of current time object
+                currentT = datetime.datetime.now().timestamp()
+                #if the current time is after the end time of f in dailyForecasts
+                if endT <= currentT:
+                    #add 1 to the starting index of dailyForecasts
+                    i+=1
+                else:
+                    #else stop checking
+                    break
+            dailyForecasts = dailyForecasts['properties']['periods'][i:i+6]
+            #adding the forecasts to the embed
+            for f in dailyForecasts:
+                embedString += (f['name'] + " - " + f['detailedForecast'] + "\n")
+            embed.add_field(name = "Next 3 days:", value  = embedString, inline = False)
+            
+            embedString = ""
+            pointStr = str(lat) + "," + str(lon)
+            paramsDict = {'point': pointStr}
+            alerts = n.alerts(active = 1, **paramsDict)
+            activeAlerts = False
+            for f in alerts['features']:
+                endTObj = datetime.datetime.strptime(f['properties']['expires'], "%Y-%m-%dT%H:%M:%S%z")
+                startT = datetime.datetime.strptime(f['properties']['effective'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
+                endT = endTObj.timestamp()
+                currentT = datetime.datetime.now().timestamp()
+                #if the current time is before the end time and start time of the alert
+                if(endT >= currentT and startT <= currentT):
+                    activeAlerts = True
+                    embedString += (f['properties']['event'] + " until " + endTObj.strftime("%B %d, %Y at %H:%M %p") + "\n")
+            if(not activeAlerts):
+                embedString = "No active alerts."
+            if(activeAlerts):
+                embedString += ("Check your NWS website or local media for more information on these alerts.")
+            embed.add_field(name = "Alerts:", value = embedString, inline = False)
+            embed.add_field(name = "More weather information:", value = "Visit [weather.gov](https://forecast.weather.gov/MapClick.php?lat=" + str(lat) + "&lon=" + str(lon) + ").", inline = False)
+            await ctx.send(content = None, embed = embed)
 
 #run bot
 bot.run(token)
