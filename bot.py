@@ -5,6 +5,8 @@ import asyncio
 import time
 import datetime
 import random
+import json
+from os import path
 from noaa_sdk import noaa
 
 #start bot
@@ -24,10 +26,11 @@ with open("/root/bot/configu.txt", "r") as j:
 
 #initialize variables
 bot = commands.Bot(command_prefix = prefix, help_command = None)
-version = 1.41
+version = 1.5
 embedcolor = 0x71368a
 game = discord.Game(playing)
 n = noaa.NOAA()
+jsonpath = "/root/bot/reminders.json"
 
 #runs on bot ready
 @bot.event
@@ -36,6 +39,60 @@ async def on_ready():
     game = discord.Game(playing)
     await bot.change_presence(activity = game)
     print(time.ctime() + " Bot live!")
+    #checking JSON for unsent reminders
+    print("Loading JSON data...")
+    #checks if the JSON is greater than 2 bytes (has data other than an empty list)
+    if path.getsize(jsonpath) > 2:
+        with open(jsonpath) as j:
+            waitBool = False
+            reminderData = []
+            reminderData = list(json.load(j))
+            print(reminderData)
+            waitForList = []
+            for x in reminderData:
+                #if the JSON element's time is before or at the current time send the reminder now with a message at the beginning
+                if int(x['time']) <= int(time.time()):
+                    channel = bot.get_channel(int(x["channel"]))
+                    await channel.send("This reminder was sent late because of the bot being offline at the time of the original requested reminder time. " + str(x["author"]) + " " + str(x["reminder"]))
+                    delete_JSON_Element(x)
+                #if the JSON element's time is after the current time add it to a list to be run in a background task later
+                elif int(x["time"]) > int(time.time()):
+                    waitBool = True
+                    waitForList.append(x)
+        #if there are any elements of the JSON whose time is after the current time
+        if(waitBool):
+            #sorts the list of elements by time
+            waitForList.sort(key = sortKey)
+            #start background task that sends reminders later
+            wait.start(waitForList)    
+        print("JSON data successfully loaded")
+    else:
+        print("No JSON data to load")
+
+#function to delete a given JSON element
+def delete_JSON_Element(element):
+    with open(jsonpath, "r") as j:
+        reminderData = list(json.load(j))
+        newReminderData = []
+        for x in reminderData:
+            if x != element:
+                newReminderData.append(x)
+    with open(jsonpath, "w") as k:
+        json.dump(list(newReminderData), k)
+    print("Element successfully deleted")
+
+#background task that is only run once for the reminders that are backed up in the JSON but have not passed
+@tasks.loop(count = 1)
+async def wait(remindList):
+    for x in remindList:
+        await asyncio.sleep(x["time"] - int(time.time()))
+        channel = bot.get_channel(int(x["channel"]))
+        await channel.send(str(x["author"]) + " " + str(x["reminder"]))
+        delete_JSON_Element(x)
+
+#function for sorting list
+def sortKey(x):
+    return x["time"]
 
 #decorator to check if message author is owner
 def isOwner():
@@ -51,7 +108,7 @@ async def help(ctx):
     embed.add_field(name = "ping", value = "Pings the user.", inline = False)
     embed.add_field(name = "coinflip", value = "Flips a coin.", inline = False)
     embed.add_field(name = "remind `or` r", value = "Sends a reminder after a user-specified amount of time.\nUsage:" + prefix + "remind `<time>`; `<reminder>`\nSupported units: seconds, minutes, hours, days", inline = False)
-    # embed.add_field(name = "weather", value = "Sends the weather. For full usage type `" + prefix + "weather help`.", inline = False)
+    embed.add_field(name = "weather", value = "Sends the weather. For full usage type `" + prefix + "weather help`.", inline = False)
     embed.add_field(name = "google `or` g", value = "Sends Google search link.", inline = False)
     embed.add_field(name = "duckduckgo `or` ddg", value = "Sends DuckDuckGo search link.", inline = False)
     embed.add_field(name = "gay", value = "Because Chase is gay.", inline = False)
@@ -137,33 +194,50 @@ async def remind(ctx, *args):
         print(reminder)
         ctime = int(time.time())
         sep = ";"
-        remindtime = (str(reminder.split(sep, 2)[0]))
+        remindtime = str(reminder.split(sep, 2)[0])
         remindtimestr = ''.join([i for i in remindtime if not i.isdigit()])
         remindtimenum = ''.join([i for i in remindtime if i.isdigit()])
         remindtimestr = str(remindtimestr.strip())
         remindtimenum = int(remindtimenum)
-        reminder = (reminder.split(sep, 2)[1]).strip()
-        print(str(remindtimenum),remindtimestr,reminder,remindtime)
+        remindauthor = str(ctx.message.author.mention)
+        remindchannel = ctx.message.channel.id
+        reminder = str((reminder.split(sep, 2)[1]).strip())
+        print(remindauthor, ":", reminder, remindtime, str(remindtimenum), remindtimestr)
         if (remindtimestr == "d" or remindtimestr == "day" or remindtimestr == "days" or remindtimestr == " d" or remindtimestr == " day" or remindtimestr == " days"):
             finalremindtime = (remindtimenum * 86400) + ctime
-            remindtimelongstr="day"
+            remindtimelongstr = "day"
         elif (remindtimestr == "h" or remindtimestr == "hour" or remindtimestr == "hours" or remindtimestr == " h" or remindtimestr == " hour" or remindtimestr == " hours"):
             finalremindtime = (remindtimenum * 3600) + ctime
-            remindtimelongstr="hour"
+            remindtimelongstr = "hour"
         elif (remindtimestr == "m" or remindtimestr == "minute" or remindtimestr == "minutes" or remindtimestr == " m" or remindtimestr == " minute" or remindtimestr == " minutes"):
             finalremindtime = (remindtimenum * 60) + ctime
-            remindtimelongstr="minute"
+            remindtimelongstr = "minute"
         elif (remindtimestr == "s" or remindtimestr == "second" or remindtimestr == "seconds" or remindtimestr == " s" or remindtimestr == " second" or remindtimestr == " seconds"):
             finalremindtime = remindtimenum + ctime
-            remindtimelongstr="second"
+            remindtimelongstr = "second"
         else:
             await ctx.send("Invalid time.")
+            return
         if remindtimenum == 1:
-            await ctx.send("Okay, " + str(ctx.message.author.mention) + ", I'll remind you in " + str(remindtimenum) + " " + str(remindtimelongstr) + ".")
+            await ctx.send("Okay " + remindauthor + ", I'll remind you in " + str(remindtimenum) + " " + remindtimelongstr + ".")
         elif remindtimenum > 1:
-            await ctx.send("Okay, " + str(ctx.message.author.mention) + ", I'll remind you in " + str(remindtimenum) + " " + str(remindtimelongstr) + "s.")
-        await asyncio.sleep(finalremindtime-ctime)
-        await ctx.send(str(ctx.message.author.mention) + " " + str(reminder))
+            await ctx.send("Okay " + remindauthor + ", I'll remind you in " + str(remindtimenum) + " " + remindtimelongstr + "s.")
+        else:
+            await ctx.send("Invalid time.")
+            return
+        #add reminder info to JSON
+        reminderList = []
+        if path.getsize(jsonpath) > 2:
+            with open(jsonpath, "r") as j:
+                reminderList = list(json.load(j))
+        reminderDict = {"reminder": reminder, "author": remindauthor, "time": finalremindtime, "channel": remindchannel}
+        reminderList.append(reminderDict)
+        with open(jsonpath, "w") as j:
+            json.dump(reminderList, j)
+        print("Added to JSON")
+        await asyncio.sleep(finalremindtime - ctime)
+        await ctx.send(remindauthor + " " + str(reminder))
+        delete_JSON_Element(reminderDict)
 
 #echoes what is said
 @isOwner()
