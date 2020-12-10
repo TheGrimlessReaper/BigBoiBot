@@ -361,6 +361,7 @@ async def weather(ctx, *args):
             for f in hourlyForecasts:
                 t = datetime.datetime.strptime((f['startTime']), "%Y-%m-%dT%H:%M:%S%z").strftime("%I:%M %p")
                 embedString += (t + " - " + str(f['temperature']) + "°" + f['temperatureUnit'] + ", " + f['shortForecast'] + "\n")
+            embedString = embedString[:1023]
             embed.add_field(name = "Next 6 hours:", value = embedString, inline = False)
             
             embedString = ""
@@ -381,6 +382,7 @@ async def weather(ctx, *args):
             #adding the forecasts to the embed
             for f in dailyForecasts:
                 embedString += (f['name'] + " - " + f['detailedForecast'] + "\n")
+            embedString = embedString[:1023]
             embed.add_field(name = "Next 3 days:", value  = embedString, inline = False)
             
             embedString = ""
@@ -401,6 +403,7 @@ async def weather(ctx, *args):
                 embedString = "No active alerts."
             if(activeAlerts):
                 embedString += ("Check your NWS website or local media for more information on these alerts.")
+            embedString = embedString[:1023]
             embed.add_field(name = "Alerts:", value = embedString, inline = False)
             embed.add_field(name = "More weather information:", value = "Visit [weather.gov](https://forecast.weather.gov/MapClick.php?lat=" + str(lat) + "&lon=" + str(lon) + ").", inline = False)
             await ctx.send(content = None, embed = embed)
