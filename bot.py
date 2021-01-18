@@ -123,7 +123,7 @@ async def help(ctx):
     embed.add_field(name = "ping", value = "Pings the user.", inline = False)
     embed.add_field(name = "coinflip", value = "Flips a coin.", inline = False)
     embed.add_field(name = "remind or r", value = "Sends a reminder after a user-specified amount of time.\nUsage: `" + prefix + "remind <time><units>; <reminder>`\nSupported units: seconds, minutes, hours, days", inline = False)
-    embed.add_field(name = "weather", value = "Sends the weather. For full usage type `" + prefix + "weather help`.", inline = False)
+    embed.add_field(name = "weather or w", value = "Sends the weather.", inline = False)
     embed.add_field(name = "google or g", value = "Sends Google search link.", inline = False)
     embed.add_field(name = "duckduckgo or ddg", value = "Sends DuckDuckGo search link.", inline = False)
     embed.add_field(name = "gay", value = "Because Chase is gay.", inline = False)
@@ -332,7 +332,7 @@ async def horny(ctx):
     await ctx.send(file = discord.File(hornyPath))
 
 #command that gives the weather
-@bot.command()
+@bot.command(aliases = ["w"])
 async def weather(ctx, *args):
     if args:
         async with ctx.channel.typing():
