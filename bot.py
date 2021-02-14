@@ -38,7 +38,7 @@ with open(configPath, "r") as j:
 
 #initialize variables
 bot = commands.Bot(command_prefix = prefix, help_command = None)
-version = 1.61
+version = 1.65
 embedColor = 0x71368a
 game = discord.Game(playing)
 
@@ -399,7 +399,7 @@ async def weather(ctx, *args):
             activeAlerts = False
             for f in alerts['features']:
                 #datetime object of the end time of the alert
-                endTObj = datetime.datetime.strptime(f['properties']['expires'], "%Y-%m-%dT%H:%M:%S%z")
+                endTObj = datetime.datetime.strptime(f['properties']['ends'], "%Y-%m-%dT%H:%M:%S%z")
                 #these are ints of time since epoch
                 startT = datetime.datetime.strptime(f['properties']['effective'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
                 endT = endTObj.timestamp()
