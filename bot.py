@@ -20,6 +20,7 @@ tokenPath = "/root/bot/token.txt"
 configPath = "/root/bot/configu.txt"
 mapsKeyPath = "/root/bot/mapskey.txt"
 hornyPath = "/root/bot/horny.jpg"
+doubtPath = "/root/bot/doubt.png"
 
 #read bot token
 with open(tokenPath, "r") as f:
@@ -123,7 +124,7 @@ async def help(ctx):
     embed.add_field(name = "ping", value = "Pings the user.", inline = False)
     embed.add_field(name = "coinflip", value = "Flips a coin.", inline = False)
     embed.add_field(name = "remind or r", value = "Sends a reminder after a user-specified amount of time.\nUsage: `" + prefix + "remind <time><units>; <reminder>`\nSupported units: seconds, minutes, hours, days", inline = False)
-    embed.add_field(name = "weather or w", value = "Sends the weather.", inline = False)
+    embed.add_field(name = "weather or w", value = "Sends the weather. Type `" + prefix + "weather help` for usage help.", inline = False)
     embed.add_field(name = "google or g", value = "Sends Google search link.", inline = False)
     embed.add_field(name = "duckduckgo or ddg", value = "Sends DuckDuckGo search link.", inline = False)
     embed.add_field(name = "gay", value = "Because Chase is gay.", inline = False)
@@ -280,143 +281,181 @@ async def on_disconnect():
 async def on_resumed():
     starttime = time.time()
     print(time.ctime() + " Client reconnected!")
- 
-#command that plays hangman
-#doesn't work yet, only owner can play
-@isOwner()
-@bot.command()
-async def hangman(ctx):
-    user = ctx.message.author
-    dm = await user.create_dm()
-    await user.send("Hi! You're recieving this DM because you used the " + prefix + "hangman command. What would word would you like your opponent to guess? Reply STOP now to stop.")
-    await ctx.send(str(ctx.message.author.mention) + " Welcome to Hangman! Please respond to the DM that has been sent to you within 60 seconds to play.")
-    cont = True
-    playing = True
-    while(playing):
-        while(cont):
-            def check(m):
-                return m.channel == dm
-            try:
-                message = await bot.wait_for('message', timeout = 60, check = check)
-            except asyncio.TimeoutError:
-                await ctx.send("User did not respond to DM in time. Use the " + prefix + "hangman command if you would like to play again.")
-            else:
-                if(message.content == "STOP"):
-                    await ctx.send("User stopped DMs. Use the " + prefix + "hangman command if you would like to play again.")
-                    cont, playing = False
-                else:
-                    word = message.content
-                    message = await user.send("Okay, your word is " + word + ". Is that right? React with :thumbsup: to confirm or :thumbsdown: to input another word.")
-                    await message.add_reaction('\N{THUMBS UP SIGN}')
-                    await message.add_reaction('\N{THUMBS DOWN SIGN}')
-                    await asyncio.sleep(1)
-                    # def check(reaction):
-                    #     return str(reaction.emoji == '\N{THUMBS UP SIGN}')
-                    try:
-                        react = await bot.wait_for('reaction_add', timeout = 60)
-                    except asyncio.TimeoutError:
-                        await ctx.send("User stopped DMs. Use the " + prefix + "hangman command if you would like to play again.")
-                        cont, playing = False
-                    else:
-                        print(react[0])
-                        #doesn't work
-                        if(react[0] == '👎 '):
-                            await user.send("Okay, what word would you like your opponent to guess? Reply STOP now to stop.")
-                        else:
-                            await user.send("Okay, getting the game ready for you.")
-                            cont, playing = False
 
 #because y'all are horny
 @bot.command()
 async def horny(ctx):
     await ctx.send(file = discord.File(hornyPath))
 
+#x to doubt
+@bot.command()
+async def doubt(ctx):
+    await ctx.send(file = discord.File(doubtPath))
+
+##helper functions for weather
+#searches for lat and lon of searched location using Google Maps API
+def search(searchArray):
+    search = ""
+    for x in searchArray:
+        search += str(x) + " "
+    #searches for the location's coordinates using the google maps api
+    geo = m.geocode(search)
+    lat = float(round(geo[0]['geometry']['location']['lat'], 4))
+    lon = float(round(geo[0]['geometry']['location']['lng'], 4))
+    locArray = [lat, lon]
+    return locArray
+
+#returns a string for the hourly forecast
+def getHourly(lat, lon, len):
+    ##hourly forecast
+    hourlyForecasts = n.points_forecast(lat, lon, hourly = True)
+    #datetime object of the current time in GMT
+    currentTimeGMT = datetime.datetime.now(datetime.timezone.utc)
+    i = 0
+    for f in hourlyForecasts['properties']['periods']:
+        #datetime object of the time of the spot being iterated in hourlyForecasts
+        weatherTime = datetime.datetime.strptime(f['startTime'], "%Y-%m-%dT%H:%M:%S%z")
+        #checks if the string of current hour in gmt is equal to the string of the hour of the place in the forecast converted to gmt (so it will work with any time zone)
+        if currentTimeGMT.strftime("%I %p") == (datetime.datetime.utcfromtimestamp(weatherTime.timestamp()).strftime("%I %p")):
+            #if it is then break the for loop
+            break
+        #if it is not then add 1 to the index of hourly forecasts to use
+        else:
+            i+=1
+    hourlyForecasts = hourlyForecasts['properties']['periods'][i:i + len]
+    embedString = ""
+    #adding the modified forecast array to the embed
+    for f in hourlyForecasts:
+        #start time of forecast in the format hour:min am/pm
+        t = datetime.datetime.strptime((f['startTime']), "%Y-%m-%dT%H:%M:%S%z").strftime("%I:%M %p")
+        embedString += (t + " - " + str(f['temperature']) + "°" + f['temperatureUnit'] + ", " + f['shortForecast'] + "\n")
+    #embed string needs to be less than 1024 characters because of a limitation with the Discord API
+    embedString = embedString[:1023]
+    return embedString
+
+#returns a string for the daily forecast
+def getDaily(lat, lon, len):
+    ##daily forecast
+    embedString = ""
+    i = 0
+    dailyForecasts = n.points_forecast(lat, lon, hourly = False)
+    for f in dailyForecasts['properties']['periods']:
+        #converting the datetime object we are iterating at to seconds since epoch
+        endT = datetime.datetime.strptime(f['endTime'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
+        #seconds since epoch of current time
+        currentT = datetime.datetime.now().timestamp()
+        #if the current time is after the end time of f in dailyForecasts
+        if endT <= currentT:
+            #add 1 to the starting index of dailyForecasts
+            i+=1
+        #else stop checking
+        else:
+            break
+    dailyForecasts = dailyForecasts['properties']['periods'][i:i + len]
+    #adding the modified forecast array to the embed
+    for f in dailyForecasts:
+        embedString += (f['name'] + " - " + f['detailedForecast'] + "\n")
+    #embed string needs to be less than 1024 characters because of a limitation with the Discord API
+    embedString = embedString[:1023]
+    return embedString
+
+#returns a string for alerts
+def getAlerts(lat, lon, desc):
+    ##alerts
+    embedString = ""
+    pointStr = str(lat) + "," + str(lon)
+    paramsDict = {'point': pointStr}
+    alerts = n.alerts(active = 1, **paramsDict)
+    activeAlerts = False
+    for f in alerts['features']:
+        #datetime object of the end time of the alert
+        #if statement checks to make sure that the ends field is not null
+        if(f['properties']['ends'] != None):
+            endTObj = datetime.datetime.strptime(f['properties']['ends'], "%Y-%m-%dT%H:%M:%S%z")
+        #if it is use expires instead
+        else:
+            endTObj = datetime.datetime.strptime(f['properties']['expires'], "%Y-%m-%dT%H:%M:%S%z")
+        #these are ints of time since epoch
+        #if statement checks to make sure that the effective field is not null
+        if(f['properties']['effective'] != None):
+            startT = datetime.datetime.strptime(f['properties']['effective'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
+        #if it is use onset instead
+        else:
+            startT = datetime.datetime.strptime(f['properties']['onset'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
+        endT = endTObj.timestamp()
+        currentT = datetime.datetime.now().timestamp()
+        #if the current time is before the end time and after the start time of the alert
+        if(endT >= currentT and startT <= currentT):
+            activeAlerts = True
+            #add the alert to the embed
+            embedString += (f['properties']['event'] + " until " + endTObj.strftime("%B %d, %Y at %I:%M %p") + "\n")
+            if(desc):
+                print("desc")
+                embedString += (":" + f['properties']['description'] + "\n")
+    if(not activeAlerts):
+        embedString = "No active alerts."
+    if(not desc):
+        if(activeAlerts):
+            embedString += ("Check your NWS website or local media for more information on these alerts.")
+    #embed string needs to be less than 1024 characters because of a limitation with the Discord API
+    embedString = embedString[:1023]
+    return embedString
+
 #command that gives the weather
 @bot.command(aliases = ["w"])
 async def weather(ctx, *args):
     if args:
         async with ctx.channel.typing():
-            search = ""
-            for x in args:
-                search += str(x) + " "
-            #searches for the location's coordinates using the google maps api
-            geo = m.geocode(search)
-            lat = float(round(geo[0]['geometry']['location']['lat'], 4))
-            lon = float(round(geo[0]['geometry']['location']['lng'], 4))
-            embed = discord.Embed(title = "Weather for " + search + ":", description = "Weather provided by [the National Weather Service](https://www.weather.gov/).", color = 0x3498db)
-            ##hourly forecast
-            hourlyForecasts = n.points_forecast(lat, lon, hourly = True)
-            #datetime object of the current time in GMT
-            currentTimeGMT = datetime.datetime.now(datetime.timezone.utc)
-            i = 0
-            for f in hourlyForecasts['properties']['periods']:
-                #datetime object of the time of the spot being iterated in hourlyForecasts
-                weatherTime = datetime.datetime.strptime(f['startTime'], "%Y-%m-%dT%H:%M:%S%z")
-                #checks if the string of current hour in gmt is equal to the string of the hour of the place in the forecast converted to gmt (so it will work with any time zone)
-                if currentTimeGMT.strftime("%I %p") == (datetime.datetime.utcfromtimestamp(weatherTime.timestamp()).strftime("%I %p")):
-                    #if it is then break the for loop
-                    break
-                #if it is not then add 1 to the index of hourly forecasts to use
-                else:
-                    i+=1
-            hourlyForecasts = hourlyForecasts['properties']['periods'][i:i+6]
             embedString = ""
-            #adding the modified forecast array to the embed
-            for f in hourlyForecasts:
-                #start time of forecast in the format hour:min am/pm
-                t = datetime.datetime.strptime((f['startTime']), "%Y-%m-%dT%H:%M:%S%z").strftime("%I:%M %p")
-                embedString += (t + " - " + str(f['temperature']) + "°" + f['temperatureUnit'] + ", " + f['shortForecast'] + "\n")
-            #embed string needs to be less than 1024 characters because of a limitation with the Discord API
-            embedString = embedString[:1023]
-            embed.add_field(name = "Next 6 hours:", value = embedString, inline = False)
-            ##daily forecast
-            embedString = ""
-            dailyForecasts = n.points_forecast(lat, lon, hourly = False)
-            for f in dailyForecasts['properties']['periods']:
-                #converting the datetime object we are iterating at to seconds since epoch
-                endT = datetime.datetime.strptime(f['endTime'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
-                #seconds since epoch of current time
-                currentT = datetime.datetime.now().timestamp()
-                #if the current time is after the end time of f in dailyForecasts
-                if endT <= currentT:
-                    #add 1 to the starting index of dailyForecasts
-                    i+=1
-                #else stop checking
-                else:
-                    break
-            dailyForecasts = dailyForecasts['properties']['periods'][i:i+6]
-            #adding the modified forecast array to the embed
-            for f in dailyForecasts:
-                embedString += (f['name'] + " - " + f['detailedForecast'] + "\n")
-            #embed string needs to be less than 1024 characters because of a limitation with the Discord API
-            embedString = embedString[:1023]
-            embed.add_field(name = "Next 3 days:", value  = embedString, inline = False)
-            ##alerts
-            embedString = ""
-            pointStr = str(lat) + "," + str(lon)
-            paramsDict = {'point': pointStr}
-            alerts = n.alerts(active = 1, **paramsDict)
-            activeAlerts = False
-            for f in alerts['features']:
-                #datetime object of the end time of the alert
-                endTObj = datetime.datetime.strptime(f['properties']['ends'], "%Y-%m-%dT%H:%M:%S%z")
-                #these are ints of time since epoch
-                startT = datetime.datetime.strptime(f['properties']['effective'], "%Y-%m-%dT%H:%M:%S%z").timestamp()
-                endT = endTObj.timestamp()
-                currentT = datetime.datetime.now().timestamp()
-                #if the current time is before the end time and after the start time of the alert
-                if(endT >= currentT and startT <= currentT):
-                    activeAlerts = True
-                    #add the alert to the embed
-                    embedString += (f['properties']['event'] + " until " + endTObj.strftime("%B %d, %Y at %I:%M %p") + "\n")
-            if(not activeAlerts):
-                embedString = "No active alerts."
-            if(activeAlerts):
-                embedString += ("Check your NWS website or local media for more information on these alerts.")
-            #embed string needs to be less than 1024 characters because of a limitation with the Discord API
-            embedString = embedString[:1023]
-            embed.add_field(name = "Alerts:", value = embedString, inline = False)
-            embed.add_field(name = "More weather information:", value = "Visit [weather.gov](https://forecast.weather.gov/MapClick.php?lat=" + str(lat) + "&lon=" + str(lon) + ").", inline = False)
+            temp = ""
+            if(args[0].lower() == "hourly" or args[0].lower() == "hour" or args[0].lower() == "daily" or args[0].lower() == "day" or args[0].lower() == "weekly" or args[0].lower() == "alerts" or args[0].lower() == "alert" or args[0].lower() == "help"):
+                temp = args[0].lower()
+                args = args[1:]
+            #there will be nothing in args if the user types help which will throw an error otherwise
+            if(args):
+                locArray = search(args)
+                lat = locArray[0]
+                lon = locArray[1]
+                searchStr = ""
+            for i in args:
+                searchStr += i + " "
+            if(temp == "hourly" or temp == "hour"):
+                embed = discord.Embed(title = "Hourly forecast for " + searchStr + ":", description = "Weather provided by [the National Weather Service](https://www.weather.gov/).", color = 0x3498db)
+                embedString = getHourly(lat, lon, 13)
+                # embed string needs to be less than 1024 characters because of a limitation with the Discord API
+                embedString = embedString[:1023]
+                embed.add_field(name = "Next 12 hours:", value = embedString, inline = False)
+            elif(temp == "daily" or temp == "day" or temp == "weekly"):
+                embed = discord.Embed(title = "Daily forecast for " + searchStr + ":", description = "Weather provided by [the National Weather Service](https://www.weather.gov/).", color = 0x3498db)
+                embedString = getDaily(lat, lon, 15)
+                # embed string needs to be less than 1024 characters because of a limitation with the Discord API
+                embedString = embedString[:1023]
+                embed.add_field(name = "Next 7 days:", value = embedString, inline = False)
+            elif(temp == "alerts" or temp == "alert"):
+                embed = discord.Embed(title = "Alerts for " + searchStr + ":", description = "Weather provided by [the National Weather Service](https://www.weather.gov/).", color = 0x3498db)
+                embedString = getAlerts(lat, lon, True)
+                # embed string needs to be less than 1024 characters because of a limitation with the Discord API
+                embedString = embedString[:1023]
+                embed.add_field(name = "Alerts:", value = embedString, inline = False)
+            elif(temp == "help"):
+                embed = discord.Embed(title = "Weather Help:", description = "Usage for the Weather command.\nTyping weather [location] sends all commands listed at once (with more limited details).\nTyping weather [command] [location] sends that command (with more details).", color = 0x3498db)
+                embed.add_field(name = "Hourly:", value = "Sends the hourly forecast for up to 12 hours after the current time.", inline = False)
+                embed.add_field(name = "Daily:", value = "Sends the daily forecast for up to 3 days after the current time.", inline = False)
+                embed.add_field(name = "Alerts:", value = "Sends all currently active alerts.", inline = False)
+            else:
+                embed = discord.Embed(title = "Weather for " + searchStr + ":", description = "Weather provided by [the National Weather Service](https://www.weather.gov/).", color = 0x3498db)
+                embedString = getHourly(lat, lon, 6)
+                embed.add_field(name = "Next 6 hours:", value = embedString, inline = False)
+                ##daily forecast
+                embedString = getDaily(lat, lon, 6)
+                embed.add_field(name = "Next 3 days:", value  = embedString, inline = False)
+                ##alerts
+                embedString = getAlerts(lat, lon, False)
+                # embed string needs to be less than 1024 characters because of a limitation with the Discord API
+                embedString = embedString[:1023]
+                embed.add_field(name = "Alerts:", value = embedString, inline = False)
+            if(temp != "help"):
+                embed.add_field(name = "More weather information:", value = "Visit [weather.gov](https://forecast.weather.gov/MapClick.php?lat=" + str(lat) + "&lon=" + str(lon) + ").", inline = False)
             await ctx.send(content = None, embed = embed)
 
 #run bot
