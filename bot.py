@@ -39,7 +39,7 @@ with open(configPath, "r") as j:
 
 #initialize variables
 bot = commands.Bot(command_prefix = prefix, help_command = None)
-version = 1.65
+version = 1.8
 embedColor = 0x71368a
 game = discord.Game(playing)
 
@@ -457,6 +457,30 @@ async def weather(ctx, *args):
             if(temp != "help"):
                 embed.add_field(name = "More weather information:", value = "Visit [weather.gov](https://forecast.weather.gov/MapClick.php?lat=" + str(lat) + "&lon=" + str(lon) + ").", inline = False)
             await ctx.send(content = None, embed = embed)
+
+#on message sent
+@bot.event
+async def on_message(ctx):
+    #checking if the author is not the bot
+    if ctx.author != bot.user:
+        await bot.process_commands(ctx)
+        #check for twitter link somewhere in message
+        #replaces https://twitter.com with https://fxtwitter.com in a message
+        if "https://twitter.com" in ctx.content:
+            linkTemp = ctx.content
+            #takes off the front part of the message before the link
+            while linkTemp[:19] != "https://twitter.com":
+                linkTemp = linkTemp[1:]
+            linkTemp2 = linkTemp
+            c = 0
+            #takes off the last part of the message after the link
+            while not linkTemp[c : c + 1].isspace() and not c == len(linkTemp):
+                c += 1
+            linkTemp = linkTemp[:c]
+            #adds fx to the twitter url and takes off the space left at the end
+            linkTemp = linkTemp[:8] + "fx" + linkTemp[8:]
+            #sends modified link
+            await ctx.channel.send(linkTemp)
 
 #run bot
 bot.run(token)
