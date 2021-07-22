@@ -14,3 +14,6 @@ Using [this wrapper](https://github.com/paulokuong/noaa).
 ## Google Maps API
 Geocoding provided by [Google Maps API](https://cloud.google.com/maps-platform/#get-started).
 Using [this wrapper](https://github.com/googlemaps/google-maps-services-python).
+
+## TwitFix
+Uses [TwitFix](https://github.com/robinuniverse/TwitFix) to fix Twitter URLs.
