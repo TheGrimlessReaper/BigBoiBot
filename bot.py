@@ -7,7 +7,7 @@ import datetime
 import random
 import json
 from os import path
-from sys import version
+from sys import version_info
 import googlemaps
 from noaa_sdk import noaa
 
@@ -166,7 +166,7 @@ async def info(ctx):
     embed = discord.Embed(title="Bot info", color=embedColor)
     embed.add_field(name="Ping", value=str(int(bot.latency * 1000)) + " ms", inline=False)
     embed.add_field(name="Uptime", value=str(uptime), inline=False)
-    embed.add_field(name="Version", value="Bot version: " + str(botVersion) + "\nDiscord.py version: " + str(discord.__version__) + " " + str(discord.version_info.releaselevel) + "\nPython version: " + str(version), inline=False)
+    embed.add_field(name="Version", value="Bot version: " + str(botVersion) + "\nDiscord.py version: " + str(discord.__version__) + " " + str(discord.version_info.releaselevel) + "\nPython version: " + str(version_info.major) + "." + str(version_info.minor) + "." + str(version_info.micro) + " " + str(version_info.releaselevel), inline=False)
     embed.add_field(name="View source code:", value="https://github.com/TheGrimlessReaper/BigBoiBot", inline=False)
     await ctx.send(content=None, embed=embed)
 
