@@ -46,7 +46,7 @@ with open(configPath, "r") as j:
 
 # initialize variables
 bot = commands.Bot(command_prefix=prefix, help_command=None)
-botVersion = 1.81
+botVersion = 1.82
 embedColor = 0x71368a
 game = discord.Game(playing)
 
